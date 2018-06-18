@@ -20,12 +20,7 @@ import (
 	"github.com/xelabs/go-mysqlstack/sqldb"
 )
 
-func localHostLogin(s *driver.Session) bool {
-	host, _, err := net.SplitHostPort(s.Addr())
-	if err != nil {
-		return false
-	}
-
+func localHostLogin(host string) bool {
 	if host == "127.0.0.1" {
 		return true
 	}
@@ -52,16 +47,16 @@ func (spanner *Spanner) SessionCheck(s *driver.Session) error {
 		return sqldb.NewSQLError(sqldb.ER_CON_COUNT_ERROR, "Too many connections(max: %v)", max)
 	}
 
-	// Local login bypass.
-	if localHostLogin(s) {
-		return nil
-	}
-
 	log := spanner.log
 	host, _, err := net.SplitHostPort(s.Addr())
 	if err != nil {
 		log.Error("proxy.spanner.split.address.error:%+v", s.Addr())
 		return sqldb.NewSQLError(sqldb.ER_ACCESS_DENIED_ERROR, "Access denied for user from host '%v'", s.Addr())
+	}
+
+	// Local login bypass.
+	if localHostLogin(host) {
+		return nil
 	}
 
 	// Ip check.
@@ -119,7 +114,7 @@ func (spanner *Spanner) AuthCheck(s *driver.Session) error {
 	// gotStage1 = SHA1(password)
 	gotStage1 := make([]byte, 20)
 	for i := range resp {
-		// SHA1(password) = (resp XOR SHA1(SHA1(password)))
+		// SHA1(password) = (resp XOR want)
 		gotStage1[i] = (resp[i] ^ want[i])
 	}
 
